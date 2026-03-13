@@ -55,10 +55,21 @@ theme --list
 | vantablack | Dark, pure black |
 | white | Light, pure white |
 
+## What changes
+
+When you pick a theme, **everything updates at once**:
+
+- **Windows Terminal** — color scheme on all WSL profiles
+- **VS Code** — color theme + extension auto-installed on first use
+- **Windows dark/light mode** — light themes switch Windows to light mode, dark themes to dark mode
+- **Title bar accent color** — matched to the theme's accent color
+- **Desktop wallpaper** — each theme comes with curated wallpapers from Omarchy
+
 ## How it works
 
 - **Windows Terminal**: Color schemes are injected into `settings.json`. The `theme` command updates the active scheme on all WSL profiles.
 - **VS Code**: The `workbench.colorTheme` setting is updated in `settings.json`. Extensions are installed on demand (first use only), matching Omarchy's lazy-install approach.
+- **Windows theme**: Dark/light mode and accent color are set via registry + DWM API. Wallpapers are stored locally and set via `SystemParametersInfo`.
 - **GUI**: A native Windows `.exe` (built with Go + Win32 API, no dependencies) provides a clickable theme picker with live preview.
 - **Fonts**: JetBrainsMono Nerd Font is installed to the user font directory and registered in the Windows registry.
 

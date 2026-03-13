@@ -224,6 +224,47 @@ func broadcastThemeChange() {
 	p, _ := syscall.UTF16PtrFromString("ImmersiveColorSet")
 	var result uintptr
 	pSendMessageTimeoutW.Call(0xFFFF, 0x001A, 0, uintptr(unsafe.Pointer(p)), 0x0002, 5000, uintptr(unsafe.Pointer(&result)))
+	// Also broadcast WindowMetrics for taskbar
+	p2, _ := syscall.UTF16PtrFromString("WindowMetrics")
+	pSendMessageTimeoutW.Call(0xFFFF, 0x001A, 0, uintptr(unsafe.Pointer(p2)), 0x0002, 5000, uintptr(unsafe.Pointer(&result)))
+}
+
+// DWM undocumented API for live colorization update
+type dwmColorizationParams struct {
+	Color            uint32
+	Afterglow        uint32
+	ColorBalance     uint32
+	AfterglowBalance uint32
+	BlurBalance      uint32
+	GlassReflection  uint32
+	OpaqueBlend      uint32
+}
+
+var pGetProcAddress = kernel32.NewProc("GetProcAddress")
+
+func setDwmColor(argb uint32) {
+	dwm, err := syscall.LoadLibrary("dwmapi.dll")
+	if err != nil { log.Printf("LoadLibrary dwmapi.dll: %v", err); return }
+	defer syscall.FreeLibrary(dwm)
+
+	// Undocumented: ordinal 127 = DwmGetColorizationParameters, 131 = DwmSetColorizationParameters
+	getAddr, _, _ := pGetProcAddress.Call(uintptr(dwm), 127)
+	if getAddr == 0 { log.Printf("GetProcAddress 127 failed"); return }
+	setAddr, _, _ := pGetProcAddress.Call(uintptr(dwm), 131)
+	if setAddr == 0 { log.Printf("GetProcAddress 131 failed"); return }
+
+	var params dwmColorizationParams
+	ret, _, _ := syscall.SyscallN(getAddr, uintptr(unsafe.Pointer(&params)))
+	if ret != 0 { log.Printf("DwmGet failed: 0x%X", ret); return }
+
+	params.Color = argb
+	params.Afterglow = argb
+	ret, _, _ = syscall.SyscallN(setAddr, uintptr(unsafe.Pointer(&params)), 0)
+	if ret != 0 {
+		log.Printf("DwmSet failed: 0x%X", ret)
+	} else {
+		log.Printf("DwmSetColorizationParameters OK: 0x%08X", argb)
+	}
 }
 
 // --- Windows dark/light mode + accent color ---
@@ -236,13 +277,25 @@ func setWinTheme(light bool, accentRGB uint32) {
 
 	// Convert RGB (as stored in Theme.Ac — BBGGRR) to ABGR for registry (0xFFBBGGRR)
 	abgr := 0xFF000000 | accentRGB
+	// ColorizationColor uses ARGB with ~C4 alpha for transparency blend
+	// We need to convert BBGGRR to AARRGGBB
+	r := accentRGB & 0xFF
+	g := (accentRGB >> 8) & 0xFF
+	b := (accentRGB >> 16) & 0xFF
+	argb := 0xC4000000 | (r << 16) | (g << 8) | b
 	setRegDword(`SOFTWARE\Microsoft\Windows\DWM`, "AccentColor", abgr)
+	setRegDword(`SOFTWARE\Microsoft\Windows\DWM`, "ColorizationColor", argb)
+	setRegDword(`SOFTWARE\Microsoft\Windows\DWM`, "ColorizationAfterglow", argb)
 	setRegDword(`SOFTWARE\Microsoft\Windows\DWM`, "ColorPrevalence", 1)
+	setRegDword(`SOFTWARE\Microsoft\Windows\DWM`, "EnableWindowColorization", 1)
 	setRegDword(`SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, "ColorPrevalence", 1)
 
 	broadcastThemeChange()
-	log.Printf("setWinTheme light=%v accent=0x%08X", light, abgr)
+	setDwmColor(argb)
+	log.Printf("setWinTheme light=%v accent=0x%08X argb=0x%08X", light, abgr, argb)
 }
+
+
 
 func readWinTheme() (lightMode uint32, accent uint32) {
 	lightMode = getRegDword(`SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, "AppsUseLightTheme")
