@@ -101,11 +101,20 @@ with open('$WT_SETTINGS', 'r') as f:
 
 font_config = {'face': 'JetBrainsMono Nerd Font', 'size': 9}
 
-# Set on all WSL profiles
+# Set on all Linux/WSL profiles — match any WSL distro source or commandline
+# Covers: Microsoft.WSL, Windows.Terminal.Wsl, CanonicalGroupLimited.*, wsl.exe, etc.
+skip = {'Windows PowerShell', 'Command Prompt', 'Azure Cloud Shell'}
 for profile in settings['profiles']['list']:
+    name = profile.get('name', '')
     source = profile.get('source', '')
-    commandline = profile.get('commandline', '')
-    if 'wsl' in source.lower() or 'wsl' in commandline.lower() or source == 'Microsoft.WSL':
+    cmd = profile.get('commandline', '')
+    if name in skip:
+        continue
+    if ('wsl' in source.lower() or 'wsl' in cmd.lower()
+        or 'ubuntu' in source.lower() or 'ubuntu' in name.lower()
+        or 'canonical' in source.lower()
+        or 'debian' in source.lower() or 'debian' in name.lower()
+        or source == 'Microsoft.WSL'):
         profile['font'] = font_config
 
 with open('$WT_SETTINGS', 'w') as f:
