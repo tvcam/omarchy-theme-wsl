@@ -1,0 +1,433 @@
+#!/bin/bash
+# Omarchy WSL Theme Picker
+# Switches themes for Windows Terminal + VS Code from WSL
+# Inspired by basecamp/omarchy theme system, adapted for WSL
+#
+# Usage: theme [name]  - set theme directly
+#        theme          - interactive picker with live preview
+#        theme --gui    - launch Windows GUI app
+#        theme --list   - list available themes
+#        theme --uninstall [--keep-data] - remove omarchy-wsl
+
+# Auto-detect paths
+WIN_USER=$(/mnt/c/Windows/System32/cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
+if [ -z "$WIN_USER" ]; then
+  echo "Error: Could not detect Windows username"
+  exit 1
+fi
+
+WT_SETTINGS="/mnt/c/Users/$WIN_USER/AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json"
+VSCODE_SETTINGS="/mnt/c/Users/$WIN_USER/AppData/Roaming/Code/User/settings.json"
+
+# Launch GUI mode
+if [ "$1" = "--gui" ] || [ "$1" = "-gui" ] || [ "$1" = "-g" ]; then
+  "/mnt/c/Users/$WIN_USER/bin/theme-picker.exe" &
+  exit 0
+fi
+
+# List themes
+if [ "$1" = "--list" ] || [ "$1" = "-l" ]; then
+  echo "Available themes:"
+  printf '  %s\n' "${THEMES[@]}"
+  exit 0
+fi
+
+# Uninstall
+if [ "$1" = "--uninstall" ]; then
+  echo "Uninstalling omarchy-wsl..."
+
+  # Remove color schemes from WT settings
+  if [ -f "$WT_SETTINGS" ]; then
+    python3 -c "
+import json
+with open('$WT_SETTINGS', 'r') as f:
+    s = json.load(f)
+s['schemes'] = [sc for sc in s.get('schemes', []) if not sc.get('name', '').startswith('Omarchy ')]
+# Reset to default scheme if using Omarchy
+for key in ['defaults']:
+    d = s.get('profiles', {}).get(key, {})
+    if d.get('colorScheme', '').startswith('Omarchy'):
+        d['colorScheme'] = 'Campbell'
+for p in s.get('profiles', {}).get('list', []):
+    if p.get('colorScheme', '').startswith('Omarchy'):
+        p['colorScheme'] = 'Campbell'
+with open('$WT_SETTINGS', 'w') as f:
+    json.dump(s, f, indent=4)
+"
+    echo "  Removed Omarchy color schemes from Windows Terminal"
+  fi
+
+  # Remove exe
+  WIN_EXE="/mnt/c/Users/$WIN_USER/bin/theme-picker.exe"
+  [ -f "$WIN_EXE" ] && rm "$WIN_EXE" && echo "  Removed theme-picker.exe"
+
+  # Remove this script
+  rm "$HOME/bin/theme" 2>/dev/null && echo "  Removed ~/bin/theme"
+
+  if [ "$2" = "--keep-data" ]; then
+    echo "  Kept font and theme data"
+  else
+    echo "  Font files left in place (Windows manages fonts separately)"
+  fi
+
+  echo "Done. Terminal will use 'Campbell' default theme."
+  exit 0
+fi
+
+THEMES=(
+  "catppuccin-latte"
+  "catppuccin"
+  "ethereal"
+  "everforest"
+  "flexoki-light"
+  "gruvbox"
+  "hackerman"
+  "kanagawa"
+  "matte-black"
+  "miasma"
+  "nord"
+  "osaka-jade"
+  "ristretto"
+  "rose-pine"
+  "tokyo-night"
+  "vantablack"
+  "white"
+)
+
+get_scheme_name() {
+  case "$1" in
+    catppuccin-latte) echo "Omarchy Catppuccin Latte" ;;
+    catppuccin)       echo "Omarchy Catppuccin" ;;
+    ethereal)         echo "Omarchy Ethereal" ;;
+    everforest)       echo "Omarchy Everforest" ;;
+    flexoki-light)    echo "Omarchy Flexoki Light" ;;
+    gruvbox)          echo "Omarchy Gruvbox" ;;
+    hackerman)        echo "Omarchy Hackerman" ;;
+    kanagawa)         echo "Omarchy Kanagawa" ;;
+    matte-black)      echo "Omarchy Matte Black" ;;
+    miasma)           echo "Omarchy Miasma" ;;
+    nord)             echo "Omarchy Nord" ;;
+    osaka-jade)       echo "Omarchy Osaka Jade" ;;
+    ristretto)        echo "Omarchy Ristretto" ;;
+    rose-pine)        echo "Omarchy Rose Pine" ;;
+    tokyo-night)      echo "Omarchy Tokyo Night" ;;
+    vantablack)       echo "Omarchy Vantablack" ;;
+    white)            echo "Omarchy White" ;;
+    *) echo "" ;;
+  esac
+}
+
+get_vscode_theme() {
+  case "$1" in
+    catppuccin-latte) echo "Catppuccin Latte" ;;
+    catppuccin)       echo "Catppuccin Mocha" ;;
+    ethereal)         echo "Ethereal" ;;
+    everforest)       echo "Everforest Dark" ;;
+    flexoki-light)    echo "flexoki-light" ;;
+    gruvbox)          echo "Gruvbox Dark Medium" ;;
+    hackerman)        echo "Hackerman" ;;
+    kanagawa)         echo "Kanagawa" ;;
+    matte-black)      echo "Matte Black" ;;
+    miasma)           echo "In The Fog Dark" ;;
+    nord)             echo "Nord" ;;
+    osaka-jade)       echo "Ocean Green: Dark" ;;
+    ristretto)        echo "Monokai Pro (Filter Ristretto)" ;;
+    rose-pine)        echo "Rosé Pine Dawn" ;;
+    tokyo-night)      echo "Tokyo Night" ;;
+    vantablack)       echo "Vantablack" ;;
+    white)            echo "White" ;;
+    *) echo "" ;;
+  esac
+}
+
+get_vscode_extension() {
+  case "$1" in
+    catppuccin-latte) echo "catppuccin.catppuccin-vsc" ;;
+    catppuccin)       echo "catppuccin.catppuccin-vsc" ;;
+    ethereal)         echo "Bjarne.ethereal-omarchy" ;;
+    everforest)       echo "sainnhe.everforest" ;;
+    flexoki-light)    echo "shadesOfBuntu.flexoki-light" ;;
+    gruvbox)          echo "jdinhlife.gruvbox" ;;
+    hackerman)        echo "Bjarne.hackerman-omarchy" ;;
+    kanagawa)         echo "qufiwefefwoyn.kanagawa" ;;
+    matte-black)      echo "TahaYVR.matteblack" ;;
+    miasma)           echo "ganevru.in-the-fog-theme" ;;
+    nord)             echo "arcticicestudio.nord-visual-studio-code" ;;
+    osaka-jade)       echo "jovejonovski.ocean-green" ;;
+    ristretto)        echo "monokai.theme-monokai-pro-vscode" ;;
+    rose-pine)        echo "mvllow.rose-pine" ;;
+    tokyo-night)      echo "enkia.tokyo-night" ;;
+    vantablack)       echo "Bjarne.vantablack-omarchy" ;;
+    white)            echo "Bjarne.white-theme" ;;
+    *) echo "" ;;
+  esac
+}
+
+# Ensure VS Code extension is installed (on demand, like Omarchy)
+ensure_vscode_extension() {
+  local extension="$1"
+  [ -z "$extension" ] && return 0
+  command -v code &>/dev/null || return 0
+
+  if ! code --list-extensions 2>/dev/null | grep -Fxiq "$extension"; then
+    echo "  Installing VS Code extension: $extension..."
+    code --install-extension "$extension" --force >/dev/null 2>&1
+  fi
+}
+
+set_wt_theme() {
+  python3 -c "
+import json
+with open('$WT_SETTINGS', 'r') as f:
+    settings = json.load(f)
+scheme = '''$1'''
+settings['profiles']['defaults']['colorScheme'] = scheme
+for profile in settings['profiles']['list']:
+    if 'colorScheme' in profile:
+        profile['colorScheme'] = scheme
+with open('$WT_SETTINGS', 'w') as f:
+    json.dump(settings, f, indent=4)
+"
+}
+
+set_vscode_theme() {
+  local theme="$1"
+  local win_path="C:\\Users\\$WIN_USER\\AppData\\Roaming\\Code\\User\\settings.json"
+
+  python3 -c "
+import re
+
+path = '$VSCODE_SETTINGS'
+theme = '''$theme'''
+
+with open(path, 'r') as f:
+    content = f.read()
+
+if re.search(r'\"workbench\.colorTheme\"', content):
+    content = re.sub(
+        r'(\"workbench\.colorTheme\"\s*:\s*)\"[^\"]*\"',
+        r'\1\"' + theme + '\"',
+        content
+    )
+else:
+    content = content.replace('{', '{' + '\n    \"workbench.colorTheme\": \"' + theme + '\",', 1)
+
+with open(path, 'w') as f:
+    f.write(content)
+"
+  # Touch file from Windows side to trigger native NTFS notification
+  powershell.exe -NoProfile -Command "(Get-Item '$win_path').LastWriteTime = Get-Date" >/dev/null 2>&1 &
+}
+
+get_current_wt_theme() {
+  python3 -c "
+import json
+with open('$WT_SETTINGS', 'r') as f:
+    settings = json.load(f)
+print(settings['profiles']['defaults'].get('colorScheme', 'Campbell'))
+"
+}
+
+get_current_vscode_theme() {
+  python3 -c "
+import re
+with open('$VSCODE_SETTINGS', 'r') as f:
+    content = f.read()
+m = re.search(r'\"workbench\.colorTheme\"\s*:\s*\"([^\"]+)\"', content)
+print(m.group(1) if m else '')
+"
+}
+
+apply_theme() {
+  local scheme_name vscode_theme extension
+  scheme_name=$(get_scheme_name "$1")
+  if [ -z "$scheme_name" ]; then
+    echo "Unknown theme: $1"
+    echo "Available themes: ${THEMES[*]}"
+    return 1
+  fi
+  vscode_theme=$(get_vscode_theme "$1")
+  extension=$(get_vscode_extension "$1")
+
+  set_wt_theme "$scheme_name"
+  ensure_vscode_extension "$extension"
+  set_vscode_theme "$vscode_theme"
+  echo "Applied: $1 (Terminal: $scheme_name, VS Code: $vscode_theme)"
+}
+
+# Direct mode
+if [ -n "$1" ]; then
+  apply_theme "$1"
+  exit $?
+fi
+
+# Save original themes for revert on cancel
+ORIGINAL_WT_THEME=$(get_current_wt_theme)
+ORIGINAL_VSCODE_THEME=$(get_current_vscode_theme)
+
+# fzf mode with live preview
+if command -v fzf &>/dev/null; then
+  export WT_SETTINGS VSCODE_SETTINGS
+  selected=$(printf '%s\n' "${THEMES[@]}" | fzf \
+    --prompt="Theme (enter=apply, esc=cancel): " \
+    --height=20 --reverse --no-info \
+    --preview-window=hidden \
+    --bind="focus:execute-silent(
+      scheme=\$(case {} in
+        catppuccin-latte) echo 'Omarchy Catppuccin Latte' ;;
+        catppuccin)       echo 'Omarchy Catppuccin' ;;
+        ethereal)         echo 'Omarchy Ethereal' ;;
+        everforest)       echo 'Omarchy Everforest' ;;
+        flexoki-light)    echo 'Omarchy Flexoki Light' ;;
+        gruvbox)          echo 'Omarchy Gruvbox' ;;
+        hackerman)        echo 'Omarchy Hackerman' ;;
+        kanagawa)         echo 'Omarchy Kanagawa' ;;
+        matte-black)      echo 'Omarchy Matte Black' ;;
+        miasma)           echo 'Omarchy Miasma' ;;
+        nord)             echo 'Omarchy Nord' ;;
+        osaka-jade)       echo 'Omarchy Osaka Jade' ;;
+        ristretto)        echo 'Omarchy Ristretto' ;;
+        rose-pine)        echo 'Omarchy Rose Pine' ;;
+        tokyo-night)      echo 'Omarchy Tokyo Night' ;;
+        vantablack)       echo 'Omarchy Vantablack' ;;
+        white)            echo 'Omarchy White' ;;
+      esac) && vscode=\$(case {} in
+        catppuccin-latte) echo 'Catppuccin Latte' ;;
+        catppuccin)       echo 'Catppuccin Mocha' ;;
+        ethereal)         echo 'Ethereal' ;;
+        everforest)       echo 'Everforest Dark' ;;
+        flexoki-light)    echo 'flexoki-light' ;;
+        gruvbox)          echo 'Gruvbox Dark Medium' ;;
+        hackerman)        echo 'Hackerman' ;;
+        kanagawa)         echo 'Kanagawa' ;;
+        matte-black)      echo 'Matte Black' ;;
+        miasma)           echo 'In The Fog Dark' ;;
+        nord)             echo 'Nord' ;;
+        osaka-jade)       echo 'Ocean Green: Dark' ;;
+        ristretto)        echo 'Monokai Pro (Filter Ristretto)' ;;
+        rose-pine)        echo 'Rosé Pine Dawn' ;;
+        tokyo-night)      echo 'Tokyo Night' ;;
+        vantablack)       echo 'Vantablack' ;;
+        white)            echo 'White' ;;
+      esac) && python3 -c \"
+import json, re
+with open('$WT_SETTINGS', 'r') as f:
+    s = json.load(f)
+s['profiles']['defaults']['colorScheme'] = '\$scheme'
+for p in s['profiles']['list']:
+    if 'colorScheme' in p:
+        p['colorScheme'] = '\$scheme'
+with open('$WT_SETTINGS', 'w') as f:
+    json.dump(s, f, indent=4)
+
+with open('$VSCODE_SETTINGS', 'r') as f:
+    c = f.read()
+if re.search(r'workbench\.colorTheme', c):
+    c = re.sub(r'(\\\"workbench\\.colorTheme\\\"\\s*:\\s*)\\\"[^\\\"]*\\\"', r'\\1\\\"' + '\$vscode' + '\\\"', c)
+else:
+    c = c.replace('{', '{\\n    \\\"workbench.colorTheme\\\": \\\"' + '\$vscode' + '\\\",', 1)
+with open('$VSCODE_SETTINGS', 'w') as f:
+    f.write(c)
+\"
+    )"
+  )
+  if [ -n "$selected" ]; then
+    # Install extension on confirm
+    ext=$(get_vscode_extension "$selected")
+    ensure_vscode_extension "$ext"
+    echo "Applied: $selected"
+  else
+    set_wt_theme "$ORIGINAL_WT_THEME"
+    [ -n "$ORIGINAL_VSCODE_THEME" ] && set_vscode_theme "$ORIGINAL_VSCODE_THEME"
+    echo "Reverted."
+  fi
+  exit 0
+fi
+
+# Fallback: interactive numbered menu with live preview
+preview_theme() {
+  local idx=$(($1 - 1))
+  local name="${THEMES[$idx]}"
+  set_wt_theme "$(get_scheme_name "$name")"
+  set_vscode_theme "$(get_vscode_theme "$name")"
+}
+
+show_menu() {
+  clear
+  echo "  Omarchy Theme Picker (Terminal + VS Code)"
+  echo "  ──────────────────────────────────────────"
+  echo ""
+  for i in "${!THEMES[@]}"; do
+    local num=$((i+1))
+    if [ "$num" -eq "$1" ]; then
+      printf "  \033[7m %2d) %s \033[0m\n" "$num" "${THEMES[$i]}"
+    else
+      printf "   %2d) %s\n" "$num" "${THEMES[$i]}"
+    fi
+  done
+  echo ""
+  echo "  ↑/↓ or j/k: browse  enter: apply  q: cancel"
+}
+
+# Start at current theme
+current=1
+for i in "${!THEMES[@]}"; do
+  scheme=$(get_scheme_name "${THEMES[$i]}")
+  if [ "$scheme" = "$ORIGINAL_WT_THEME" ]; then
+    current=$((i+1))
+    break
+  fi
+done
+
+total=${#THEMES[@]}
+show_menu "$current"
+
+while true; do
+  IFS= read -rsn1 key
+
+  if [ "$key" = $'\x1b' ]; then
+    read -rsn2 -t 0.1 seq
+    case "$seq" in
+      '[A') key="up" ;;
+      '[B') key="down" ;;
+      *)    continue ;;
+    esac
+  fi
+
+  case "$key" in
+    up|k)
+      if [ "$current" -gt 1 ]; then
+        current=$((current - 1))
+      else
+        current=$total
+      fi
+      show_menu "$current"
+      preview_theme "$current"
+      ;;
+    down|j)
+      if [ "$current" -lt "$total" ]; then
+        current=$((current + 1))
+      else
+        current=1
+      fi
+      show_menu "$current"
+      preview_theme "$current"
+      ;;
+    "")
+      # Enter — confirm, install extension on demand
+      local name="${THEMES[$((current-1))]}"
+      ensure_vscode_extension "$(get_vscode_extension "$name")"
+      echo ""
+      echo "  Applied: $name"
+      exit 0
+      ;;
+    q)
+      # Cancel — revert
+      set_wt_theme "$ORIGINAL_WT_THEME"
+      [ -n "$ORIGINAL_VSCODE_THEME" ] && set_vscode_theme "$ORIGINAL_VSCODE_THEME"
+      echo ""
+      echo "  Reverted."
+      exit 0
+      ;;
+  esac
+done
