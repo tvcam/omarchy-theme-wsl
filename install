@@ -126,17 +126,15 @@ cp "$INSTALL_DIR/theme-picker.exe" "$WIN_BIN/theme-picker.exe"
 echo "  Installed theme-picker.exe to C:\\Users\\$WIN_USER\\bin\\"
 
 # --- Ensure ~/bin is in PATH ---
-if ! echo "$PATH" | grep -q "$HOME/bin"; then
-  for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-    if [ -f "$rc" ]; then
-      if ! grep -q 'HOME/bin' "$rc"; then
-        echo 'export PATH="$HOME/bin:$PATH"' >> "$rc"
-        echo "  Added ~/bin to PATH in $(basename $rc)"
-      fi
-    fi
-  done
-  export PATH="$HOME/bin:$PATH"
+SHELL_RC="$HOME/.bashrc"
+[ -n "$ZSH_VERSION" ] || [ "$(basename "$SHELL")" = "zsh" ] && SHELL_RC="$HOME/.zshrc"
+if [ -f "$SHELL_RC" ]; then
+  if ! grep -q 'HOME/bin' "$SHELL_RC"; then
+    echo 'export PATH="$HOME/bin:$PATH"' >> "$SHELL_RC"
+    echo "  Added ~/bin to PATH in $(basename $SHELL_RC)"
+  fi
 fi
+export PATH="$HOME/bin:$PATH"
 
 # --- Cleanup ---
 rm -rf "$INSTALL_DIR"
@@ -157,5 +155,6 @@ echo "    flexoki-light, gruvbox, hackerman, kanagawa, matte-black,"
 echo "    miasma, nord, osaka-jade, ristretto, rose-pine,"
 echo "    tokyo-night, vantablack, white"
 echo ""
-echo "  You may need to restart your terminal for the font to take effect."
+echo "  Run 'source ~/.zshrc' or 'source ~/.bashrc' (or open a new tab) to use 'theme'.
+  You may need to restart your terminal for the font to take effect."
 echo ""
