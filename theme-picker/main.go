@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -50,6 +51,7 @@ var (
 	pRoundRect        = gdi32.NewProc("RoundRect")
 	pCreatePen             = gdi32.NewProc("CreatePen")
 	pSendMessageTimeoutW   = user32.NewProc("SendMessageTimeoutW")
+	pSendNotifyMessageW    = user32.NewProc("SendNotifyMessageW")
 	pSystemParametersInfoW = user32.NewProc("SystemParametersInfoW")
 	pRegOpenKeyExW         = advapi32.NewProc("RegOpenKeyExW")
 	pRegSetValueExW        = advapi32.NewProc("RegSetValueExW")
@@ -82,6 +84,7 @@ const (
 	dtCtr        = 0x01
 	dtLeft       = 0x00
 	transp       = 1
+	wmUser       = 0x0400
 	hkeyCurrentUser      = 0x80000001
 	keySetValue          = 0x0002
 	regDword             = 4
@@ -138,7 +141,18 @@ var (
 
 	// Channel for sending work to the worker goroutine
 	workCh = make(chan workItem, 32)
+
+	statusMu  sync.Mutex
+	statusMsg string
 )
+
+func setStatus(s string) {
+	statusMu.Lock(); statusMsg = s; statusMu.Unlock()
+	pPostMessageW.Call(hwndMain, wmUser, 0, 0)
+}
+func getStatus() string {
+	statusMu.Lock(); defer statusMu.Unlock(); return statusMsg
+}
 
 func initLog() {
 	h, _ := os.UserHomeDir()
@@ -227,11 +241,9 @@ func getRegDword(subkey, name string) uint32 {
 
 func broadcastThemeChange() {
 	p, _ := syscall.UTF16PtrFromString("ImmersiveColorSet")
-	var result uintptr
-	pSendMessageTimeoutW.Call(0xFFFF, 0x001A, 0, uintptr(unsafe.Pointer(p)), 0x0002, 5000, uintptr(unsafe.Pointer(&result)))
-	// Also broadcast WindowMetrics for taskbar
+	pSendNotifyMessageW.Call(0xFFFF, 0x001A, 0, uintptr(unsafe.Pointer(p)))
 	p2, _ := syscall.UTF16PtrFromString("WindowMetrics")
-	pSendMessageTimeoutW.Call(0xFFFF, 0x001A, 0, uintptr(unsafe.Pointer(p2)), 0x0002, 5000, uintptr(unsafe.Pointer(&result)))
+	pSendNotifyMessageW.Call(0xFFFF, 0x001A, 0, uintptr(unsafe.Pointer(p2)))
 }
 
 // DWM undocumented API for live colorization update
@@ -450,25 +462,32 @@ func worker() {
 			if latest.idx >= 0 && latest.idx < len(themes) {
 				t := themes[latest.idx]
 				log.Printf("preview %d: %s", latest.idx, t.Name)
+				setStatus("Previewing " + t.Name + "...")
 				setWT(t.Scheme)
 				setVS(t.VsTheme)
 				setWinTheme(t.Light, t.Ac)
-				if wp := findWallpaper(t.Slug); wp != "" { setWallpaper(wp) }
+				// Skip wallpaper on preview — only apply on confirm
 			}
 		case workApply:
 			if latest.idx >= 0 && latest.idx < len(themes) {
 				t := themes[latest.idx]
 				log.Printf("apply %d: %s", latest.idx, t.Name)
+				setStatus("Applying " + t.Name + "...")
 				setWT(t.Scheme)
-				installExt(t.VsExt)
-				setVS(t.VsTheme)
 				setWinTheme(t.Light, t.Ac)
 				if wp := findWallpaper(t.Slug); wp != "" { setWallpaper(wp) }
+				if t.VsExt != "" {
+					setStatus("Installing VS Code extension: " + t.VsExt + "...")
+					installExt(t.VsExt)
+				}
+				setStatus("Setting VS Code theme...")
+				setVS(t.VsTheme)
+				setStatus("Done!")
 			}
-			// Signal done
 			pPostMessageW.Call(hwndMain, wmDestroy, 0, 0)
 		case workRevert:
 			log.Printf("revert")
+			setStatus("Reverting...")
 			if origWT != "" { setWT(origWT) }
 			if origVS != "" { setVS(origVS) }
 			setRegDword(`SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, "AppsUseLightTheme", origWinLight)
@@ -537,7 +556,13 @@ func wndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			dy := y + 13; dx := r.R - 60
 			for _, c := range []uint32{t.Bg, t.Fg, t.Ac} { rr(hdc, RECT{dx, dy, dx + 12, dy + 12}, 6, c, 0x555555); dx += 16 }
 		}
-		by := int32(76 + vis*42 + 10); bw := int32(120); bh := int32(36)
+		pSelectObject.Call(hdc, fApp)
+		if st := getStatus(); st != "" {
+			pSetTextColor.Call(hdc, 0x888888)
+			stR := RECT{20, int32(76 + vis*42 + 10), cr.R - 20, int32(76 + vis*42 + 30)}
+			ds(hdc, st, &stR, dtLeft|dtSingle|dtVCtr)
+		}
+		by := int32(76 + vis*42 + 32); bw := int32(120); bh := int32(36)
 		bx := (cr.R - bw*2 - 12) / 2
 		pSelectObject.Call(hdc, fBtn)
 		rApply = RECT{bx, by, bx + bw, by + bh}
@@ -587,6 +612,8 @@ func wndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		if d > 0 && curIdx > 0 { curIdx-- } else if d < 0 && curIdx < len(themes)-1 { curIdx++ }
 		ensVis(); workCh <- workItem{workPreview, curIdx}; pInvalidateRect.Call(hwnd, 0, 1)
 		return 0
+	case wmUser:
+		pInvalidateRect.Call(hwnd, 0, 1); return 0
 	case wmDestroy:
 		pPostQuitMessage.Call(0); return 0
 	}
@@ -637,7 +664,7 @@ func main() {
 		WndProc: syscall.NewCallback(wndProc), Inst: hI, Cursor: cur, Class: cl}
 	pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 	v := maxVis; if len(themes) < v { v = len(themes) }
-	w := int32(400); h := int32(76 + int32(v)*42 + 70 + 32) // +32 for title bar chrome
+	w := int32(400); h := int32(76 + int32(v)*42 + 70 + 32 + 22) // +32 title bar, +22 status line
 	sw, _, _ := pGetSystemMetrics.Call(0); sh, _, _ := pGetSystemMetrics.Call(1)
 	hwnd, _, _ := pCreateWindowExW.Call(wsExTopmost, uintptr(unsafe.Pointer(cl)),
 		uintptr(unsafe.Pointer(u16("Omarchy Themes"))), wsCaption|wsSysMenu|wsVisible,

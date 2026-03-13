@@ -191,6 +191,10 @@ for profile in settings['profiles']['list']:
 with open('$WT_SETTINGS', 'w') as f:
     json.dump(settings, f, indent=4)
 "
+  # Force NTFS change notification via PowerShell (needed on Windows 10)
+  local win_path
+  win_path=$(wslpath -w "$WT_SETTINGS")
+  powershell.exe -NoProfile -Command "[System.IO.File]::WriteAllText('$win_path', [System.IO.File]::ReadAllText('$win_path'))" 2>/dev/null
 }
 
 set_vscode_theme() {
