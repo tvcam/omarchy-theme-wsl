@@ -4,6 +4,7 @@ Bring the [Omarchy](https://github.com/basecamp/omarchy) theme system to WSL. 17
 
 ![17 themes](https://img.shields.io/badge/themes-17-blue)
 ![WSL](https://img.shields.io/badge/platform-WSL-orange)
+[![Website](https://img.shields.io/badge/website-tvcam.github.io-blue)](https://tvcam.github.io/omarchy-theme-wsl/)
 
 ![Omarchy Theme Picker](docs/assets/omarchy-demo.gif)
 
