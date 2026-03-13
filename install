@@ -125,6 +125,19 @@ mkdir -p "$WIN_BIN"
 cp "$INSTALL_DIR/theme-picker.exe" "$WIN_BIN/theme-picker.exe"
 echo "  Installed theme-picker.exe to C:\\Users\\$WIN_USER\\bin\\"
 
+# --- Install wallpapers ---
+WIN_WALLPAPERS="/mnt/c/Users/$WIN_USER/AppData/Local/omarchy-wsl/wallpapers"
+echo "  Installing wallpapers..."
+wp_count=0
+for theme_dir in "$INSTALL_DIR"/wallpapers/*/; do
+  name=$(basename "$theme_dir")
+  dest="$WIN_WALLPAPERS/$name"
+  mkdir -p "$dest"
+  cp "$theme_dir"* "$dest/" 2>/dev/null
+  wp_count=$((wp_count + 1))
+done
+echo "  Installed wallpapers for $wp_count themes"
+
 # --- Ensure ~/bin is in PATH ---
 SHELL_RC="$HOME/.bashrc"
 [ -n "$ZSH_VERSION" ] || [ "$(basename "$SHELL")" = "zsh" ] && SHELL_RC="$HOME/.zshrc"

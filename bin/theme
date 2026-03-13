@@ -238,6 +238,14 @@ print(m.group(1) if m else '')
 "
 }
 
+set_win_theme() {
+  local slug="$1"
+  local exe="/mnt/c/Users/$WIN_USER/bin/theme-picker.exe"
+  if [ -f "$exe" ]; then
+    "$exe" --apply "$slug" 2>/dev/null &
+  fi
+}
+
 apply_theme() {
   local scheme_name vscode_theme extension
   scheme_name=$(get_scheme_name "$1")
@@ -252,6 +260,7 @@ apply_theme() {
   set_wt_theme "$scheme_name"
   ensure_vscode_extension "$extension"
   set_vscode_theme "$vscode_theme"
+  set_win_theme "$1"
   echo "Applied: $1 (Terminal: $scheme_name, VS Code: $vscode_theme)"
 }
 
@@ -350,6 +359,7 @@ preview_theme() {
   local name="${THEMES[$idx]}"
   set_wt_theme "$(get_scheme_name "$name")"
   set_vscode_theme "$(get_vscode_theme "$name")"
+  set_win_theme "$name"
 }
 
 show_menu() {

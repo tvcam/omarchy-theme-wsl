@@ -17,7 +17,8 @@ import (
 var (
 	user32 = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
-	gdi32  = syscall.NewLazyDLL("gdi32.dll")
+	gdi32    = syscall.NewLazyDLL("gdi32.dll")
+	advapi32 = syscall.NewLazyDLL("advapi32.dll")
 
 	pRegisterClassExW = user32.NewProc("RegisterClassExW")
 	pCreateWindowExW  = user32.NewProc("CreateWindowExW")
@@ -47,7 +48,12 @@ var (
 	pInvalidateRect   = user32.NewProc("InvalidateRect")
 	pGetSystemMetrics = user32.NewProc("GetSystemMetrics")
 	pRoundRect        = gdi32.NewProc("RoundRect")
-	pCreatePen        = gdi32.NewProc("CreatePen")
+	pCreatePen             = gdi32.NewProc("CreatePen")
+	pSendMessageTimeoutW   = user32.NewProc("SendMessageTimeoutW")
+	pSystemParametersInfoW = user32.NewProc("SystemParametersInfoW")
+	pRegOpenKeyExW         = advapi32.NewProc("RegOpenKeyExW")
+	pRegSetValueExW        = advapi32.NewProc("RegSetValueExW")
+	pRegCloseKey           = advapi32.NewProc("RegCloseKey")
 )
 
 const (
@@ -76,6 +82,12 @@ const (
 	dtCtr        = 0x01
 	dtLeft       = 0x00
 	transp       = 1
+	hkeyCurrentUser      = 0x80000001
+	keySetValue          = 0x0002
+	regDword             = 4
+	spiSetDeskWallpaper  = 0x0014
+	spifUpdateIniFile    = 0x01
+	spifSendChange       = 0x02
 )
 
 type WNDCLASSEXW struct {
@@ -91,8 +103,9 @@ type PAINTSTRUCT struct {
 type RECT struct{ L, T, R, B int32 }
 
 type Theme struct {
-	Name, Scheme, VsTheme, VsExt string
-	Bg, Fg, Ac                   uint32
+	Name, Scheme, VsTheme, VsExt, Slug string
+	Bg, Fg, Ac                         uint32
+	Light                              bool
 }
 
 // Work types for the worker goroutine
@@ -116,8 +129,12 @@ var (
 	hovApply, hovCancel bool
 	scroll     int
 	maxVis     = 6
-	origWT, origVS string
-	logFile    *os.File
+	origWT, origVS   string
+	origWinLight     uint32
+	origAccent       uint32
+	origWallpaper    string
+	logFile          *os.File
+	wallpaperDir     string
 
 	// Channel for sending work to the worker goroutine
 	workCh = make(chan workItem, 32)
@@ -145,32 +162,121 @@ func hx(hex string) uint32 {
 }
 
 func initThemes() {
-	type t struct{ n, s, v, e, bg, fg, ac string }
+	type t struct {
+		n, slug, s, v, e, bg, fg, ac string
+		light                        bool
+	}
 	for _, d := range []t{
-		{"Catppuccin Latte", "Omarchy Catppuccin Latte", "Catppuccin Latte", "catppuccin.catppuccin-vsc", "#eff1f5", "#4c4f69", "#1e66f5"},
-		{"Catppuccin", "Omarchy Catppuccin", "Catppuccin Mocha", "catppuccin.catppuccin-vsc", "#1e1e2e", "#cdd6f4", "#89b4fa"},
-		{"Ethereal", "Omarchy Ethereal", "Ethereal", "Bjarne.ethereal-omarchy", "#060B1E", "#ffcead", "#7d82d9"},
-		{"Everforest", "Omarchy Everforest", "Everforest Dark", "sainnhe.everforest", "#2d353b", "#d3c6aa", "#7fbbb3"},
-		{"Flexoki Light", "Omarchy Flexoki Light", "flexoki-light", "shadesOfBuntu.flexoki-light", "#FFFCF0", "#100F0F", "#205EA6"},
-		{"Gruvbox", "Omarchy Gruvbox", "Gruvbox Dark Medium", "jdinhlife.gruvbox", "#282828", "#d4be98", "#7daea3"},
-		{"Hackerman", "Omarchy Hackerman", "Hackerman", "Bjarne.hackerman-omarchy", "#0B0C16", "#ddf7ff", "#82FB9C"},
-		{"Kanagawa", "Omarchy Kanagawa", "Kanagawa", "qufiwefefwoyn.kanagawa", "#1f1f28", "#dcd7ba", "#7e9cd8"},
-		{"Matte Black", "Omarchy Matte Black", "Matte Black", "TahaYVR.matteblack", "#121212", "#bebebe", "#e68e0d"},
-		{"Miasma", "Omarchy Miasma", "In The Fog Dark", "ganevru.in-the-fog-theme", "#222222", "#c2c2b0", "#78824b"},
-		{"Nord", "Omarchy Nord", "Nord", "arcticicestudio.nord-visual-studio-code", "#2e3440", "#d8dee9", "#81a1c1"},
-		{"Osaka Jade", "Omarchy Osaka Jade", "Ocean Green: Dark", "jovejonovski.ocean-green", "#111c18", "#C1C497", "#509475"},
-		{"Ristretto", "Omarchy Ristretto", "Monokai Pro (Filter Ristretto)", "monokai.theme-monokai-pro-vscode", "#2c2525", "#e6d9db", "#f38d70"},
-		{"Rose Pine", "Omarchy Rose Pine", "Rosé Pine Dawn", "mvllow.rose-pine", "#faf4ed", "#575279", "#56949f"},
-		{"Tokyo Night", "Omarchy Tokyo Night", "Tokyo Night", "enkia.tokyo-night", "#1a1b26", "#a9b1d6", "#7aa2f7"},
-		{"Vantablack", "Omarchy Vantablack", "Vantablack", "Bjarne.vantablack-omarchy", "#0d0d0d", "#ffffff", "#8d8d8d"},
-		{"White", "Omarchy White", "White", "Bjarne.white-theme", "#ffffff", "#000000", "#6e6e6e"},
+		{"Catppuccin Latte", "catppuccin-latte", "Omarchy Catppuccin Latte", "Catppuccin Latte", "catppuccin.catppuccin-vsc", "#eff1f5", "#4c4f69", "#1e66f5", true},
+		{"Catppuccin", "catppuccin", "Omarchy Catppuccin", "Catppuccin Mocha", "catppuccin.catppuccin-vsc", "#1e1e2e", "#cdd6f4", "#89b4fa", false},
+		{"Ethereal", "ethereal", "Omarchy Ethereal", "Ethereal", "Bjarne.ethereal-omarchy", "#060B1E", "#ffcead", "#7d82d9", false},
+		{"Everforest", "everforest", "Omarchy Everforest", "Everforest Dark", "sainnhe.everforest", "#2d353b", "#d3c6aa", "#7fbbb3", false},
+		{"Flexoki Light", "flexoki-light", "Omarchy Flexoki Light", "flexoki-light", "shadesOfBuntu.flexoki-light", "#FFFCF0", "#100F0F", "#205EA6", true},
+		{"Gruvbox", "gruvbox", "Omarchy Gruvbox", "Gruvbox Dark Medium", "jdinhlife.gruvbox", "#282828", "#d4be98", "#7daea3", false},
+		{"Hackerman", "hackerman", "Omarchy Hackerman", "Hackerman", "Bjarne.hackerman-omarchy", "#0B0C16", "#ddf7ff", "#82FB9C", false},
+		{"Kanagawa", "kanagawa", "Omarchy Kanagawa", "Kanagawa", "qufiwefefwoyn.kanagawa", "#1f1f28", "#dcd7ba", "#7e9cd8", false},
+		{"Matte Black", "matte-black", "Omarchy Matte Black", "Matte Black", "TahaYVR.matteblack", "#121212", "#bebebe", "#e68e0d", false},
+		{"Miasma", "miasma", "Omarchy Miasma", "In The Fog Dark", "ganevru.in-the-fog-theme", "#222222", "#c2c2b0", "#78824b", false},
+		{"Nord", "nord", "Omarchy Nord", "Nord", "arcticicestudio.nord-visual-studio-code", "#2e3440", "#d8dee9", "#81a1c1", false},
+		{"Osaka Jade", "osaka-jade", "Omarchy Osaka Jade", "Ocean Green: Dark", "jovejonovski.ocean-green", "#111c18", "#C1C497", "#509475", false},
+		{"Ristretto", "ristretto", "Omarchy Ristretto", "Monokai Pro (Filter Ristretto)", "monokai.theme-monokai-pro-vscode", "#2c2525", "#e6d9db", "#f38d70", false},
+		{"Rose Pine", "rose-pine", "Omarchy Rose Pine", "Rosé Pine Dawn", "mvllow.rose-pine", "#faf4ed", "#575279", "#56949f", true},
+		{"Tokyo Night", "tokyo-night", "Omarchy Tokyo Night", "Tokyo Night", "enkia.tokyo-night", "#1a1b26", "#a9b1d6", "#7aa2f7", false},
+		{"Vantablack", "vantablack", "Omarchy Vantablack", "Vantablack", "Bjarne.vantablack-omarchy", "#0d0d0d", "#ffffff", "#8d8d8d", false},
+		{"White", "white", "Omarchy White", "White", "Bjarne.white-theme", "#ffffff", "#000000", "#6e6e6e", true},
 	} {
-		themes = append(themes, Theme{d.n, d.s, d.v, d.e, hx(d.bg), hx(d.fg), hx(d.ac)})
+		themes = append(themes, Theme{d.n, d.s, d.v, d.e, d.slug, hx(d.bg), hx(d.fg), hx(d.ac), d.light})
 	}
 }
 
 func wtP() string { h, _ := os.UserHomeDir(); return filepath.Join(h, "AppData", "Local", "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe", "LocalState", "settings.json") }
 func vsP() string { h, _ := os.UserHomeDir(); return filepath.Join(h, "AppData", "Roaming", "Code", "User", "settings.json") }
+func wpDir() string { h, _ := os.UserHomeDir(); return filepath.Join(h, "AppData", "Local", "omarchy-wsl", "wallpapers") }
+
+// --- Registry helpers ---
+
+func setRegDword(subkey, name string, value uint32) {
+	var hKey uintptr
+	sk, _ := syscall.UTF16PtrFromString(subkey)
+	ret, _, _ := pRegOpenKeyExW.Call(hkeyCurrentUser, uintptr(unsafe.Pointer(sk)), 0, keySetValue, uintptr(unsafe.Pointer(&hKey)))
+	if ret != 0 { log.Printf("RegOpenKeyEx %s failed: %d", subkey, ret); return }
+	defer pRegCloseKey.Call(hKey)
+	n, _ := syscall.UTF16PtrFromString(name)
+	ret, _, _ = pRegSetValueExW.Call(hKey, uintptr(unsafe.Pointer(n)), 0, regDword, uintptr(unsafe.Pointer(&value)), 4)
+	if ret != 0 { log.Printf("RegSetValueEx %s failed: %d", name, ret) }
+}
+
+func getRegDword(subkey, name string) uint32 {
+	pRegQueryValueExW := advapi32.NewProc("RegQueryValueExW")
+	var hKey uintptr
+	sk, _ := syscall.UTF16PtrFromString(subkey)
+	ret, _, _ := pRegOpenKeyExW.Call(hkeyCurrentUser, uintptr(unsafe.Pointer(sk)), 0, 0x0001, uintptr(unsafe.Pointer(&hKey)))
+	if ret != 0 { return 0 }
+	defer pRegCloseKey.Call(hKey)
+	n, _ := syscall.UTF16PtrFromString(name)
+	var val uint32
+	var sz uint32 = 4
+	pRegQueryValueExW.Call(hKey, uintptr(unsafe.Pointer(n)), 0, 0, uintptr(unsafe.Pointer(&val)), uintptr(unsafe.Pointer(&sz)))
+	return val
+}
+
+func broadcastThemeChange() {
+	p, _ := syscall.UTF16PtrFromString("ImmersiveColorSet")
+	var result uintptr
+	pSendMessageTimeoutW.Call(0xFFFF, 0x001A, 0, uintptr(unsafe.Pointer(p)), 0x0002, 5000, uintptr(unsafe.Pointer(&result)))
+}
+
+// --- Windows dark/light mode + accent color ---
+
+func setWinTheme(light bool, accentRGB uint32) {
+	var mode uint32 = 0
+	if light { mode = 1 }
+	setRegDword(`SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, "AppsUseLightTheme", mode)
+	setRegDword(`SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, "SystemUsesLightTheme", mode)
+
+	// Convert RGB (as stored in Theme.Ac — BBGGRR) to ABGR for registry (0xFFBBGGRR)
+	abgr := 0xFF000000 | accentRGB
+	setRegDword(`SOFTWARE\Microsoft\Windows\DWM`, "AccentColor", abgr)
+	setRegDword(`SOFTWARE\Microsoft\Windows\DWM`, "ColorPrevalence", 1)
+	setRegDword(`SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, "ColorPrevalence", 1)
+
+	broadcastThemeChange()
+	log.Printf("setWinTheme light=%v accent=0x%08X", light, abgr)
+}
+
+func readWinTheme() (lightMode uint32, accent uint32) {
+	lightMode = getRegDword(`SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, "AppsUseLightTheme")
+	accent = getRegDword(`SOFTWARE\Microsoft\Windows\DWM`, "AccentColor")
+	return
+}
+
+// --- Wallpaper ---
+
+func setWallpaper(path string) {
+	if _, err := os.Stat(path); err != nil { log.Printf("wallpaper not found: %s", path); return }
+	p, _ := syscall.UTF16PtrFromString(path)
+	pSystemParametersInfoW.Call(spiSetDeskWallpaper, 0, uintptr(unsafe.Pointer(p)), spifUpdateIniFile|spifSendChange)
+	log.Printf("setWallpaper: %s", path)
+}
+
+func getWallpaper() string {
+	buf := make([]uint16, 260)
+	pSystemParametersInfoW.Call(0x0073, 260, uintptr(unsafe.Pointer(&buf[0])), 0) // SPI_GETDESKWALLPAPER
+	return syscall.UTF16ToString(buf)
+}
+
+func findWallpaper(slug string) string {
+	dir := filepath.Join(wallpaperDir, slug)
+	entries, err := os.ReadDir(dir)
+	if err != nil { return "" }
+	for _, e := range entries {
+		n := strings.ToLower(e.Name())
+		if strings.HasSuffix(n, ".jpg") || strings.HasSuffix(n, ".png") {
+			return filepath.Join(dir, e.Name())
+		}
+	}
+	return ""
+}
 
 func setWT(scheme string) {
 	log.Printf("setWT: %s", scheme)
@@ -288,6 +394,8 @@ func worker() {
 				log.Printf("preview %d: %s", latest.idx, t.Name)
 				setWT(t.Scheme)
 				setVS(t.VsTheme)
+				setWinTheme(t.Light, t.Ac)
+				if wp := findWallpaper(t.Slug); wp != "" { setWallpaper(wp) }
 			}
 		case workApply:
 			if latest.idx >= 0 && latest.idx < len(themes) {
@@ -296,6 +404,8 @@ func worker() {
 				setWT(t.Scheme)
 				installExt(t.VsExt)
 				setVS(t.VsTheme)
+				setWinTheme(t.Light, t.Ac)
+				if wp := findWallpaper(t.Slug); wp != "" { setWallpaper(wp) }
 			}
 			// Signal done
 			pPostMessageW.Call(hwndMain, wmDestroy, 0, 0)
@@ -303,6 +413,11 @@ func worker() {
 			log.Printf("revert")
 			if origWT != "" { setWT(origWT) }
 			if origVS != "" { setVS(origVS) }
+			setRegDword(`SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, "AppsUseLightTheme", origWinLight)
+			setRegDword(`SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, "SystemUsesLightTheme", origWinLight)
+			setRegDword(`SOFTWARE\Microsoft\Windows\DWM`, "AccentColor", origAccent)
+			broadcastThemeChange()
+			if origWallpaper != "" { setWallpaper(origWallpaper) }
 			pPostMessageW.Call(hwndMain, wmDestroy, 0, 0)
 		}
 	}
@@ -427,8 +542,29 @@ func main() {
 	initLog()
 	defer func() { if logFile != nil { logFile.Close() } }()
 	initThemes()
+	wallpaperDir = wpDir()
+
+	// CLI mode: theme-picker.exe --apply <slug>
+	// Used by the bash theme script to set Windows theme/accent/wallpaper
+	if len(os.Args) >= 3 && os.Args[1] == "--apply" {
+		slug := os.Args[2]
+		for _, t := range themes {
+			if t.Slug == slug {
+				log.Printf("CLI apply: %s", t.Name)
+				setWinTheme(t.Light, t.Ac)
+				if wp := findWallpaper(t.Slug); wp != "" { setWallpaper(wp) }
+				fmt.Printf("Windows: %s mode, accent applied, wallpaper set\n", map[bool]string{true: "light", false: "dark"}[t.Light])
+				return
+			}
+		}
+		fmt.Fprintf(os.Stderr, "Unknown theme: %s\n", slug)
+		os.Exit(1)
+	}
+
 	origWT = readWT(); origVS = readVS()
-	log.Printf("orig WT=%s VS=%s", origWT, origVS)
+	origWinLight, origAccent = readWinTheme()
+	origWallpaper = getWallpaper()
+	log.Printf("orig WT=%s VS=%s WinLight=%d Accent=0x%08X Wallpaper=%s", origWT, origVS, origWinLight, origAccent, origWallpaper)
 	for i, t := range themes { if t.Scheme == origWT { curIdx = i; break } }
 	ensVis()
 
