@@ -1,15 +1,19 @@
 # Omarchy WSL
 
-Bring the [Omarchy](https://github.com/basecamp/omarchy) theme system to WSL. 17 curated themes that switch both **Windows Terminal** and **VS Code** simultaneously — just like Omarchy does on native Linux.
+Bring the [Omarchy](https://github.com/basecamp/omarchy) theme system to WSL. 17 curated themes that switch **Windows Terminal**, **VS Code**, dark/light mode, accent color, and wallpaper — all at once.
 
 ![17 themes](https://img.shields.io/badge/themes-17-blue)
 ![WSL](https://img.shields.io/badge/platform-WSL-orange)
+
+![Omarchy Theme Picker](docs/assets/omarchy-demo.gif)
 
 ## Install
 
 ```bash
 source <(curl -fsSL https://raw.githubusercontent.com/tvcam/omarchy-theme-wsl/main/install)
 ```
+
+![Install](docs/assets/omarchy-install.gif)
 
 This will:
 - Add 17 Omarchy color schemes to Windows Terminal
@@ -33,6 +37,16 @@ theme --gui
 theme --list
 ```
 
+## What changes
+
+When you pick a theme, **everything updates at once**:
+
+- **Windows Terminal** — color scheme on all WSL profiles
+- **VS Code** — color theme + extension auto-installed on first use
+- **Windows dark/light mode** — light themes switch Windows to light mode, dark themes to dark mode
+- **Title bar accent color** — matched to the theme's accent color
+- **Desktop wallpaper** — each theme comes with curated wallpapers from Omarchy
+
 ## Themes
 
 | Theme | Style |
@@ -55,15 +69,22 @@ theme --list
 | vantablack | Dark, pure black |
 | white | Light, pure white |
 
-## What changes
+## Screenshots
 
-When you pick a theme, **everything updates at once**:
-
-- **Windows Terminal** — color scheme on all WSL profiles
-- **VS Code** — color theme + extension auto-installed on first use
-- **Windows dark/light mode** — light themes switch Windows to light mode, dark themes to dark mode
-- **Title bar accent color** — matched to the theme's accent color
-- **Desktop wallpaper** — each theme comes with curated wallpapers from Omarchy
+<table>
+  <tr>
+    <td><img src="docs/assets/ss213923.jpg" alt="Running the installer"></td>
+    <td><img src="docs/assets/ss213943.jpg" alt="Installer in progress"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/ss214114.jpg" alt="Installation complete"></td>
+    <td><img src="docs/assets/ss214141.jpg" alt="Theme picker open"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/ss214228.jpg" alt="Browsing themes"></td>
+    <td><img src="docs/assets/ss214250.jpg" alt="Switching themes"></td>
+  </tr>
+</table>
 
 ## How it works
 
