@@ -1,10 +1,10 @@
 #!/bin/bash
 # Omarchy WSL Installer
 # Brings the Omarchy theme system (basecamp/omarchy) to WSL
-# One command: curl -fsSL https://raw.githubusercontent.com/tvcam/omarchy-wsl/main/install | bash
+# One command: curl -fsSL https://raw.githubusercontent.com/tvcam/omarchy-theme-wsl/main/install | bash
 set -e
 
-REPO="tvcam/omarchy-wsl"
+REPO="tvcam/omarchy-theme-wsl"
 BRANCH="main"
 INSTALL_DIR="/tmp/omarchy-wsl-install"
 
