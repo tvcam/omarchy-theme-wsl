@@ -8,7 +8,7 @@ Bring the [Omarchy](https://github.com/basecamp/omarchy) theme system to WSL. 17
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tvcam/omarchy-theme-wsl/main/install | bash
+source <(curl -fsSL https://raw.githubusercontent.com/tvcam/omarchy-theme-wsl/main/install)
 ```
 
 This will:
