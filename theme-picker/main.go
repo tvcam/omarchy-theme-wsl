@@ -189,7 +189,12 @@ func initThemes() {
 	}
 }
 
-func wtP() string { h, _ := os.UserHomeDir(); return filepath.Join(h, "AppData", "Local", "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe", "LocalState", "settings.json") }
+func wtP() string {
+	h, _ := os.UserHomeDir()
+	matches, _ := filepath.Glob(filepath.Join(h, "AppData", "Local", "Packages", "Microsoft.WindowsTerminal*", "LocalState", "settings.json"))
+	if len(matches) > 0 { return matches[0] }
+	return filepath.Join(h, "AppData", "Local", "Packages", "Microsoft.WindowsTerminal_8wekyb3d8bbwe", "LocalState", "settings.json")
+}
 func vsP() string { h, _ := os.UserHomeDir(); return filepath.Join(h, "AppData", "Roaming", "Code", "User", "settings.json") }
 func wpDir() string { h, _ := os.UserHomeDir(); return filepath.Join(h, "AppData", "Local", "omarchy-wsl", "wallpapers") }
 
