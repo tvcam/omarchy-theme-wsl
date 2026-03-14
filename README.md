@@ -4,17 +4,23 @@ Bring the [Omarchy](https://github.com/basecamp/omarchy) theme system to WSL. 17
 
 ![17 themes](https://img.shields.io/badge/themes-17-blue)
 ![WSL](https://img.shields.io/badge/platform-WSL-orange)
-[![Website](https://img.shields.io/badge/website-tvcam.github.io-blue)](https://tvcam.github.io/omarchy-theme-wsl/)
 
-![Omarchy Theme Picker](docs/assets/omarchy-demo.gif)
+<table>
+  <tr>
+    <td><img src="docs/assets/ss1-ethereal.png" alt="Ethereal theme"></td>
+    <td><img src="docs/assets/ss2-everforest.png" alt="Everforest theme"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/ss3-hackerman.png" alt="Hackerman theme"></td>
+    <td><img src="docs/assets/ss4-matte-black.png" alt="Matte Black theme"></td>
+  </tr>
+</table>
 
 ## Install
 
 ```bash
 source <(curl -fsSL https://raw.githubusercontent.com/tvcam/omarchy-theme-wsl/main/install)
 ```
-
-![Install](docs/assets/omarchy-install.gif)
 
 This will:
 - Add 17 Omarchy color schemes to Windows Terminal
@@ -70,20 +76,12 @@ When you pick a theme, **everything updates at once**:
 | vantablack | Dark, pure black |
 | white | Light, pure white |
 
-## Screenshots
+## More Screenshots
 
 <table>
   <tr>
-    <td><img src="docs/assets/ss213923.jpg" alt="Running the installer"></td>
-    <td><img src="docs/assets/ss213943.jpg" alt="Installer in progress"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/ss214114.jpg" alt="Installation complete"></td>
-    <td><img src="docs/assets/ss214141.jpg" alt="Theme picker open"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/ss214228.jpg" alt="Browsing themes"></td>
-    <td><img src="docs/assets/ss214250.jpg" alt="Switching themes"></td>
+    <td><img src="docs/assets/ss5-nord.png" alt="Nord theme"></td>
+    <td><img src="docs/assets/ss6-ristretto.png" alt="Ristretto theme"></td>
   </tr>
 </table>
 
