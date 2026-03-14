@@ -5,6 +5,8 @@ Bring the [Omarchy](https://github.com/basecamp/omarchy) theme system to WSL. 17
 ![17 themes](https://img.shields.io/badge/themes-17-blue)
 ![WSL](https://img.shields.io/badge/platform-WSL-orange)
 
+![Omarchy Theme Picker](docs/assets/omarchy-demo.gif)
+
 <table>
   <tr>
     <td><img src="docs/assets/ss1-ethereal.png" alt="Ethereal theme"></td>
