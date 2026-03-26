@@ -151,13 +151,32 @@ done
 echo "  Installed wallpapers for $wp_count themes"
 
 # --- Ensure ~/bin is in PATH ---
-SHELL_RC="$HOME/.bashrc"
-[ -n "$ZSH_VERSION" ] || [ "$(basename "$SHELL")" = "zsh" ] && SHELL_RC="$HOME/.zshrc"
-if [ -f "$SHELL_RC" ]; then
-  if ! grep -q 'HOME/bin' "$SHELL_RC"; then
-    echo 'export PATH="$HOME/bin:$PATH"' >> "$SHELL_RC"
-    echo "  Added ~/bin to PATH in $(basename $SHELL_RC)"
+# Detect shell RC files to update — supports bash, zsh, and common profile files
+RC_FILES=""
+case "$(basename "${SHELL:-/bin/bash}")" in
+  zsh)  RC_FILES="$HOME/.zshrc $HOME/.zprofile" ;;
+  bash) RC_FILES="$HOME/.bashrc $HOME/.bash_profile $HOME/.profile" ;;
+  *)    RC_FILES="$HOME/.profile" ;;
+esac
+
+path_added=false
+for rc in $RC_FILES; do
+  [ -f "$rc" ] || continue
+  if ! grep -q '^export PATH=.*HOME/bin' "$rc"; then
+    echo 'export PATH="$HOME/bin:$PATH"' >> "$rc"
+    echo "  Added ~/bin to PATH in $(basename $rc)"
+    path_added=true
+    break
+  else
+    path_added=true
+    break
   fi
+done
+
+if [ "$path_added" = false ]; then
+  # No RC file found — create .profile as fallback
+  echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.profile"
+  echo "  Added ~/bin to PATH in .profile (created)"
 fi
 export PATH="$HOME/bin:$PATH"
 
